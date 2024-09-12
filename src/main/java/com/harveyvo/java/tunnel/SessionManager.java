@@ -54,9 +54,9 @@ public class SessionManager {
 
                     // Set up the tunnel (local or remote forwarding)
                     if (isLocalForwarding) {
-                        sshTunnelManager.setUpTunnel(localPort, remoteHost, remotePort);
+                        sshTunnelManager.setUpTunnel(localHost, localPort, remoteHost, remotePort);
                     } else {
-                        sshTunnelManager.setUpRemoteTunnel(localHost, localPort, remoteHost, remotePort);
+                        sshTunnelManager.setUpRemoteTunnel(remoteHost, remotePort,localHost, localPort);
                     }
 
                     // Session successfully connected: Update status and start the timer

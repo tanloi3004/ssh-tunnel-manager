@@ -20,25 +20,27 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 
 public class ProfileManagerDialog {
-    private ProfileManager profileManager = new ProfileManager();
-    private SSHProfile currentProfile;
-    private StringBuilder logMessages;
-    private ComboBox<SSHProfile.AuthMethod> authMethodComboBox;
+
+    private ProfileManager profileManager;
+    private ComboBox<String> profileComboBox;
+    private ListView<String> profileListView;
     private TextField profileNameField;
     private TextField sshHostField;
     private TextField sshPortField;
     private TextField usernameField;
     private PasswordField passwordField;
+    private TextArea sshKeyTextArea;
     private PasswordField sshKeyPassphraseField;
-    private TextArea sshKeyTextArea;  // Changed from TextField to TextArea for editable SSH key content
+    private ComboBox<SSHProfile.AuthMethod> authMethodComboBox;
+    private Runnable onProfileChangeCallback;  // Callback for triggering ComboBox reload
     private String sshKeyContent;
-    private ComboBox<String> profileComboBox;
-    private ListView<String> profileListView;
-    private TextArea consoleLogTextArea; // New TextArea for displaying console logs
+    private TextArea consoleLogTextArea; //
+    private SSHProfile currentProfile;
 
-    public ProfileManagerDialog(StringBuilder logMessages, ComboBox<String> profileComboBox) {
-        this.logMessages = logMessages;
+    public ProfileManagerDialog(ComboBox<String> profileComboBox, Runnable onProfileChangeCallback) {
         this.profileComboBox = profileComboBox;
+        this.onProfileChangeCallback = onProfileChangeCallback;
+        this.profileManager = new ProfileManager();
     }
 
     public void showProfileManager(Stage parentStage, SSHProfile profileToEdit) {
@@ -85,14 +87,24 @@ public class ProfileManagerDialog {
             this.testConnection();
         });
         Button saveButton = new Button("Save Profile");
-        saveButton.setOnAction((event) -> {
-            this.saveProfile(dialog);
-            this.refreshProfileComboBox();
-            this.refreshProfileList();
+        saveButton.setOnAction(event -> {
+            saveProfile(dialog);
+            refreshProfileList();
+            refreshProfileComboBox();  // Refresh ComboBox in main UI
+            if (onProfileChangeCallback != null) {
+                onProfileChangeCallback.run();  // Trigger the callback to refresh profiles in main UI
+            }
+            dialog.close();
         });
+
         Button deleteButton = new Button("Delete Profile");
-        deleteButton.setOnAction((event) -> {
-            this.deleteProfile();
+        deleteButton.setOnAction(event -> {
+            deleteProfile();
+            refreshProfileList();
+            refreshProfileComboBox();  // Refresh ComboBox in main UI
+            if (onProfileChangeCallback != null) {
+                onProfileChangeCallback.run();  // Trigger the callback to refresh profiles in main UI
+            }
         });
 
         // Create a TextArea for console logs
@@ -108,15 +120,15 @@ public class ProfileManagerDialog {
         formGrid.setVgap(10.0);
         formGrid.setHgap(10.0);
         formGrid.add(new Label("Profile Name:"), 0, 0);
-        formGrid.add(this.profileNameField, 1, 0);
+        formGrid.add(profileNameField, 1, 0);
         formGrid.add(new Label("SSH Host:"), 0, 1);
-        formGrid.add(this.sshHostField, 1, 1);
+        formGrid.add(sshHostField, 1, 1);
         formGrid.add(new Label("SSH Port:"), 0, 2);
-        formGrid.add(this.sshPortField, 1, 2);
+        formGrid.add(sshPortField, 1, 2);
         formGrid.add(new Label("Username:"), 0, 3);
-        formGrid.add(this.usernameField, 1, 3);
+        formGrid.add(usernameField, 1, 3);
         formGrid.add(new Label("Auth Method:"), 0, 4);
-        formGrid.add(this.authMethodComboBox, 1, 4);
+        formGrid.add(authMethodComboBox, 1, 4);
         formGrid.add(new Label("Password:"), 0, 5);
         formGrid.add(this.passwordField, 1, 5, 2, 1);
         formGrid.add(new Label("SSH Key:"), 0, 6);

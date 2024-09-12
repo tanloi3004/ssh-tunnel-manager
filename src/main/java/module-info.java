@@ -11,6 +11,7 @@ module org.example.demo3 {
     requires eu.hansolo.tilesfx;
     requires jsch;
     requires com.fasterxml.jackson.databind;
+    requires java.logging;
 
     opens com.harveyvo.java.tunnel to javafx.fxml;
     exports com.harveyvo.java.tunnel;

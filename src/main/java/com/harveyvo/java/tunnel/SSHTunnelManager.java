@@ -12,7 +12,7 @@ public class SSHTunnelManager {
     private Session session;
     private long bytesSent = 0;
     private long bytesReceived = 0;
-
+    private final LogManager logManager = LogManager.getInstance();
     // Connect based on the profile authentication method
     public void connect(SSHProfile profile) throws JSchException {
         JSch jsch = new JSch();
@@ -49,6 +49,8 @@ public class SSHTunnelManager {
         // Establish connection
         session.connect();
         System.out.println("Connected using password to " + sshHost + ":" + sshPort);
+        logManager.log("Connected using password to " + sshHost + ":" + sshPort);
+
     }
 
     // Connect using SSH key-based authentication
@@ -64,12 +66,13 @@ public class SSHTunnelManager {
         // Establish connection
         session.connect(10000);
         System.out.println("Connected using SSH key to " + sshHost + ":" + sshPort);
+        logManager.log("Connected using SSH key to " + sshHost + ":" + sshPort);
     }
 
     // Set up local port forwarding (-L)
-    public void setUpTunnel(int localPort, String remoteHost, int remotePort) throws JSchException, IOException {
+    public void setUpTunnel(String bindAddress, int localPort, String remoteHost, int remotePort) throws JSchException, IOException {
         if (session != null && session.isConnected()) {
-            session.setPortForwardingL(localPort, remoteHost, remotePort);
+            session.setPortForwardingL(bindAddress, localPort, remoteHost, remotePort);
 
             // Hook into the input/output streams here for tracking.
             Channel channel = session.openChannel("direct-tcpip");
@@ -104,15 +107,17 @@ public class SSHTunnelManager {
 
             channel.connect();
             System.out.println("Local port forwarding set up: localhost:" + localPort + " -> " + remoteHost + ":" + remotePort);
+            logManager.log("Local port forwarding set up: localhost:" + localPort + " -> " + remoteHost + ":" + remotePort);
         } else {
+            logManager.log("Session is not connected. Cannot set up tunnel.", LogManager.LogLevel.ERROR);
             throw new JSchException("Session is not connected. Cannot set up tunnel.");
         }
     }
 
     // Set up remote port forwarding (-R)
-    public void setUpRemoteTunnel(String remoteHost, int remotePort, String localHost, int localPort) throws JSchException, IOException {
+    public void setUpRemoteTunnel(String bindAddress, int remotePort, String localHost, int localPort) throws JSchException, IOException {
         if (session != null && session.isConnected()) {
-            session.setPortForwardingR(remotePort, localHost, localPort);
+            session.setPortForwardingR(bindAddress, remotePort, localHost, localPort);
 
             // Hook into the input/output streams here for tracking.
             Channel channel = session.openChannel("direct-tcpip");
@@ -146,8 +151,10 @@ public class SSHTunnelManager {
             };
 
             channel.connect();
-            System.out.println("Remote port forwarding set up: " + remoteHost + ":" + remotePort + " -> " + localHost + ":" + localPort);
+            System.out.println("Remote port forwarding set up: " + bindAddress + ":" + remotePort + " -> " + localHost + ":" + localPort);
+            logManager.log("Remote port forwarding set up: " + bindAddress + ":" + remotePort + " -> " + localHost + ":" + localPort);
         } else {
+            logManager.log("Session is not connected. Cannot set up tunnel.", LogManager.LogLevel.ERROR);
             throw new JSchException("Session is not connected. Cannot set up tunnel.");
         }
     }
@@ -165,6 +172,7 @@ public class SSHTunnelManager {
         if (session != null && session.isConnected()) {
             session.disconnect();
             System.out.println("Disconnected from SSH server.");
+            logManager.log("Disconnected from SSH server.");
         }
     }
 }

@@ -8,6 +8,7 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.VBox;
+import javafx.beans.property.SimpleStringProperty;
 
 public class SessionTable {
     private final TableView<SessionStatus> sessionTable;
@@ -24,19 +25,21 @@ public class SessionTable {
         TableColumn<SessionStatus, String> sshHostCol = new TableColumn<>("SSH Host");
         sshHostCol.setCellValueFactory(new PropertyValueFactory<>("sshHost"));
 
-        // Local host/port columns
-        TableColumn<SessionStatus, String> localHostCol = new TableColumn<>("Local Host");
-        localHostCol.setCellValueFactory(new PropertyValueFactory<>("localHost"));
+        // Mode column
+        TableColumn<SessionStatus, String> modeCol = new TableColumn<>("Mode");
+        modeCol.setCellValueFactory(cellData -> cellData.getValue().modeProperty());
 
-        TableColumn<SessionStatus, String> localPortCol = new TableColumn<>("Local Port");
-        localPortCol.setCellValueFactory(new PropertyValueFactory<>("localPort"));
+        // Local Host/Port column
+        TableColumn<SessionStatus, String> localCol = new TableColumn<>("Local");
+        localCol.setCellValueFactory(cellData ->
+                new SimpleStringProperty(cellData.getValue().getLocalHost() + ":" + cellData.getValue().getLocalPort())
+        );
 
-        // Remote host/port columns
-        TableColumn<SessionStatus, String> remoteHostCol = new TableColumn<>("Remote Host");
-        remoteHostCol.setCellValueFactory(new PropertyValueFactory<>("remoteHost"));
-
-        TableColumn<SessionStatus, String> remotePortCol = new TableColumn<>("Remote Port");
-        remotePortCol.setCellValueFactory(new PropertyValueFactory<>("remotePort"));
+        // Remote Host/Port column
+        TableColumn<SessionStatus, String> remoteCol = new TableColumn<>("Remote");
+        remoteCol.setCellValueFactory(cellData ->
+                new SimpleStringProperty(cellData.getValue().getRemoteHost() + ":" + cellData.getValue().getRemotePort())
+        );
 
         // Status and timer columns
         TableColumn<SessionStatus, String> statusCol = new TableColumn<>("Status");
@@ -46,10 +49,10 @@ public class SessionTable {
         timerCol.setCellValueFactory(cellData -> cellData.getValue().timerTextProperty());
 
         // Data usage columns (Bytes Sent/Received)
-        TableColumn<SessionStatus, String> bytesSentCol = new TableColumn<>("Bytes Sent");
+        TableColumn<SessionStatus, String> bytesSentCol = new TableColumn<>("Sent");
         bytesSentCol.setCellValueFactory(cellData -> cellData.getValue().bytesSentProperty());
 
-        TableColumn<SessionStatus, String> bytesReceivedCol = new TableColumn<>("Bytes Received");
+        TableColumn<SessionStatus, String> bytesReceivedCol = new TableColumn<>("Received");
         bytesReceivedCol.setCellValueFactory(cellData -> cellData.getValue().bytesReceivedProperty());
 
         // Action column for stopping sessions
@@ -77,7 +80,7 @@ public class SessionTable {
         });
 
         // Add all columns to the table
-        sessionTable.getColumns().addAll(numberCol, sshHostCol, localHostCol, localPortCol, remoteHostCol, remotePortCol, statusCol, timerCol, bytesSentCol, bytesReceivedCol, actionCol);
+        sessionTable.getColumns().addAll(numberCol, sshHostCol, modeCol, localCol, remoteCol, statusCol, timerCol, bytesSentCol, bytesReceivedCol, actionCol);
         sessionTable.setItems(sessionList);
     }
 

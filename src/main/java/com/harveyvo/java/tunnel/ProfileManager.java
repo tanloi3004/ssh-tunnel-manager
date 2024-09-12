@@ -5,46 +5,29 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ProfileManager {
 
-    private static final String APP_DIRECTORY_NAME = ".ssh_tunnel_manager";  // Subdirectory in the user's home
     private static final String PROFILE_FILE_NAME = "ssh_profiles.json";  // File to store profiles
     private ObjectMapper objectMapper;  // JSON serializer/deserializer
+    private FileManager fileManager;  // Use FileManager for managing files
 
     public ProfileManager() {
+        this.fileManager = new FileManager();
         objectMapper = new ObjectMapper();
-    }
 
-    // Get the user-specific directory for storing profiles (cross-platform)
-    private Path getUserProfileDirectory() {
-        String userHome = System.getProperty("user.home");  // Get the user's home directory
-        return Paths.get(userHome, APP_DIRECTORY_NAME);  // Subdirectory in the user's home
-    }
-
-    // Ensure that the directory for storing the profile file exists
-    private void ensureDirectoryExists() throws IOException {
-        Path profileDirectory = getUserProfileDirectory();
-        if (!Files.exists(profileDirectory)) {
-            Files.createDirectories(profileDirectory);  // Create the directory if it doesn't exist
-        }
-    }
-
-    // Get the full path to the profile file
-    private File getProfileFile() throws IOException {
-        ensureDirectoryExists();  // Make sure the directory exists
-        return getUserProfileDirectory().resolve(PROFILE_FILE_NAME).toFile();
+        // Ensure the profile file exists
+        this.fileManager.createFileIfNotExists(PROFILE_FILE_NAME);
     }
 
     // Load profiles from the JSON file
     public List<SSHProfile> loadProfiles() {
         try {
-            File file = getProfileFile();
+            Path profileFilePath = fileManager.getFilePath(PROFILE_FILE_NAME); // Get the profile file path
+            File file = profileFilePath.toFile();
             if (!file.exists()) {
                 return new ArrayList<>();  // Return empty list if file doesn't exist
             }
@@ -58,8 +41,8 @@ public class ProfileManager {
     // Save the list of profiles to the JSON file
     public void saveProfiles(List<SSHProfile> profiles) {
         try {
-            File file = getProfileFile();
-            objectMapper.writeValue(file, profiles);
+            Path profileFilePath = fileManager.getFilePath(PROFILE_FILE_NAME); // Get the profile file path
+            objectMapper.writeValue(profileFilePath.toFile(), profiles);
         } catch (IOException e) {
             e.printStackTrace();
         }

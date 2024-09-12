@@ -18,12 +18,13 @@ public class SessionStatus {
     private final StringProperty timerText;
     private final StringProperty bytesSent;
     private final StringProperty bytesReceived;
+    private final StringProperty mode;
 
     private Timer timer;
     private int elapsedSeconds = 0;
 
     public SessionStatus(String sessionNumber, String sshHost, String localHost, String localPort,
-                         String remoteHost, String remotePort, String status) {
+                         String remoteHost, String remotePort, Boolean isLocal, String status) {
         this.sessionNumber = new SimpleStringProperty(sessionNumber);
         this.sshHost = new SimpleStringProperty(sshHost);
         this.localHost = new SimpleStringProperty(localHost);
@@ -31,6 +32,7 @@ public class SessionStatus {
         this.remoteHost = new SimpleStringProperty(remoteHost);
         this.remotePort = new SimpleStringProperty(remotePort);
         this.status = new SimpleStringProperty(status);
+        this.mode = new SimpleStringProperty(isLocal?"-L":"-R");
         this.timerText = new SimpleStringProperty("00:00:00");
         this.bytesSent = new SimpleStringProperty("0 MB");
         this.bytesReceived = new SimpleStringProperty("0 MB");
@@ -40,8 +42,32 @@ public class SessionStatus {
         return sessionNumber;
     }
 
+    public String getMode() {
+        return mode.get();
+    }
+
+    public StringProperty modeProperty() {
+        return mode;
+    }
+
     public StringProperty sshHostProperty() {
         return sshHost;
+    }
+
+    public String getLocalHost() {
+        return localHost.get();
+    }
+
+    public String getLocalPort() {
+        return localPort.get();
+    }
+
+    public String getRemoteHost() {
+        return remoteHost.get();
+    }
+
+    public String getRemotePort() {
+        return remotePort.get();
     }
 
     public StringProperty localHostProperty() {
