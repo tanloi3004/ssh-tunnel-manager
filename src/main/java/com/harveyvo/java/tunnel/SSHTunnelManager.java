@@ -13,6 +13,7 @@ public class SSHTunnelManager {
     private long bytesSent = 0;
     private long bytesReceived = 0;
     private final LogManager logManager = LogManager.getInstance();
+
     // Connect based on the profile authentication method
     public void connect(SSHProfile profile) throws JSchException {
         JSch jsch = new JSch();
@@ -91,6 +92,18 @@ public class SSHTunnelManager {
                     }
                     return -1;
                 }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    try {
+                        int bytesRead = in.read(b, off, len);
+                        if (bytesRead != -1) bytesReceived += bytesRead;
+                        return bytesRead;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return -1;
+                    }
+                }
             };
 
             OutputStream monitoredOut = new OutputStream() {
@@ -103,7 +116,21 @@ public class SSHTunnelManager {
                         e.printStackTrace();
                     }
                 }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    try {
+                        out.write(b, off, len);
+                        bytesSent += len;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             };
+
+            // Use the monitored streams for data transmission
+            channel.setInputStream(monitoredIn);
+            channel.setOutputStream(monitoredOut);
 
             channel.connect();
             System.out.println("Local port forwarding set up: localhost:" + localPort + " -> " + remoteHost + ":" + remotePort);
@@ -136,6 +163,18 @@ public class SSHTunnelManager {
                     }
                     return -1;
                 }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    try {
+                        int bytesRead = in.read(b, off, len);
+                        if (bytesRead != -1) bytesReceived += bytesRead;
+                        return bytesRead;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return -1;
+                    }
+                }
             };
 
             OutputStream monitoredOut = new OutputStream() {
@@ -148,7 +187,21 @@ public class SSHTunnelManager {
                         e.printStackTrace();
                     }
                 }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    try {
+                        out.write(b, off, len);
+                        bytesSent += len;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             };
+
+            // Use the monitored streams for data transmission
+            channel.setInputStream(monitoredIn);
+            channel.setOutputStream(monitoredOut);
 
             channel.connect();
             System.out.println("Remote port forwarding set up: " + bindAddress + ":" + remotePort + " -> " + localHost + ":" + localPort);
