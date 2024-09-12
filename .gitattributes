@@ -1,0 +1,76 @@
+# Normalize all text files to use LF (Unix-style) line endings in the repository
+# but allow Git to handle line endings appropriately for the platform
+* text=auto
+
+# Java source files
+*.java  text eol=lf
+
+# XML files (for POM, FXML, etc.)
+*.xml   text eol=lf
+
+# Markdown documentation
+*.md    text eol=lf
+
+# Properties files
+*.properties text eol=lf
+
+# YAML configuration files
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# JSON configuration files
+*.json  text eol=lf
+
+# Text files
+*.txt   text eol=lf
+
+# Shell scripts
+*.sh    text eol=lf
+
+# Batch scripts
+*.bat   text eol=crlf
+
+# Image files (binary)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+
+# Font files (binary)
+*.ttf   binary
+*.otf   binary
+
+# Audio files (binary)
+*.wav   binary
+*.mp3   binary
+*.ogg   binary
+
+# Video files (binary)
+*.mp4   binary
+*.avi   binary
+
+# Compiled class files (binary)
+*.class binary
+
+# JAR files (binary)
+*.jar   binary
+
+# Maven wrapper files
+mvnw    text eol=lf
+mvnw.cmd text eol=crlf
+
+# IDE settings (e.g., IntelliJ IDEA, Eclipse)
+*.iml   text eol=lf
+*.classpath text eol=lf
+*.project text eol=lf
+
+# Gradle wrapper files (if used)
+gradlew    text eol=lf
+gradlew.bat text eol=crlf
+
+# Executable files
+*.exe   binary
+
+# Keep .gitignore files as text
+.gitignore text eol=lf
