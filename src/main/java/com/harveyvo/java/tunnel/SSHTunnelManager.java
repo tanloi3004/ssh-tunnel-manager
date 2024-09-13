@@ -1,17 +1,20 @@
 package com.harveyvo.java.tunnel;
 
 import com.jcraft.jsch.*;
+import org.apache.commons.io.input.CountingInputStream;
+import org.apache.commons.io.output.CountingOutputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class SSHTunnelManager {
 
     private Session session;
-    private long bytesSent = 0;
-    private long bytesReceived = 0;
+    private AtomicLong bytesSent = new AtomicLong(0);
+    private AtomicLong bytesReceived = new AtomicLong(0);
     private final LogManager logManager = LogManager.getInstance();
 
     // Connect based on the profile authentication method
@@ -20,7 +23,7 @@ public class SSHTunnelManager {
         JSch.setLogger(new Logger() {
             @Override
             public boolean isEnabled(int level) {
-                return true;  // Enable all logging levels
+                return true; // Enable all logging levels
             }
 
             @Override
@@ -51,17 +54,14 @@ public class SSHTunnelManager {
         session.connect();
         System.out.println("Connected using password to " + sshHost + ":" + sshPort);
         logManager.log("Connected using password to " + sshHost + ":" + sshPort);
-
     }
 
     // Connect using SSH key-based authentication
     private void connectWithPrivateKey(JSch jsch, String sshHost, int sshPort, String username, String sshKeyContent, String passphrase) throws JSchException {
         byte[] privateKeyBytes = sshKeyContent.getBytes();
-
         jsch.addIdentity(username, privateKeyBytes, null, passphrase != null ? passphrase.getBytes() : null);
 
         session = jsch.getSession(username, sshHost, sshPort);
-
         session.setConfig("StrictHostKeyChecking", "no");
 
         // Establish connection
@@ -74,67 +74,17 @@ public class SSHTunnelManager {
     public void setUpTunnel(String bindAddress, int localPort, String remoteHost, int remotePort) throws JSchException, IOException {
         if (session != null && session.isConnected()) {
             session.setPortForwardingL(bindAddress, localPort, remoteHost, remotePort);
-
-            // Hook into the input/output streams here for tracking.
-            Channel channel = session.openChannel("direct-tcpip");
-            InputStream in = channel.getInputStream();
-            OutputStream out = channel.getOutputStream();
-
-            InputStream monitoredIn = new InputStream() {
-                @Override
-                public int read() {
-                    try {
-                        int byteValue = in.read();
-                        if (byteValue != -1) bytesReceived++;
-                        return byteValue;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    return -1;
-                }
-
-                @Override
-                public int read(byte[] b, int off, int len) throws IOException {
-                    try {
-                        int bytesRead = in.read(b, off, len);
-                        if (bytesRead != -1) bytesReceived += bytesRead;
-                        return bytesRead;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return -1;
-                    }
-                }
-            };
-
-            OutputStream monitoredOut = new OutputStream() {
-                @Override
-                public void write(int b) {
-                    try {
-                        out.write(b);
-                        bytesSent++;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                @Override
-                public void write(byte[] b, int off, int len) throws IOException {
-                    try {
-                        out.write(b, off, len);
-                        bytesSent += len;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            };
-
-            // Use the monitored streams for data transmission
-            channel.setInputStream(monitoredIn);
-            channel.setOutputStream(monitoredOut);
-
-            channel.connect();
             System.out.println("Local port forwarding set up: localhost:" + localPort + " -> " + remoteHost + ":" + remotePort);
             logManager.log("Local port forwarding set up: localhost:" + localPort + " -> " + remoteHost + ":" + remotePort);
+
+            // Hooking the input/output streams for byte tracking
+            Channel channel = session.openChannel("direct-tcpip");
+            InputStream in = monitorInputStream(channel.getInputStream());
+            OutputStream out = monitorOutputStream(channel.getOutputStream());
+
+            channel.setInputStream(in);
+            channel.setOutputStream(out);
+            channel.connect();
         } else {
             logManager.log("Session is not connected. Cannot set up tunnel.", LogManager.LogLevel.ERROR);
             throw new JSchException("Session is not connected. Cannot set up tunnel.");
@@ -145,79 +95,50 @@ public class SSHTunnelManager {
     public void setUpRemoteTunnel(String bindAddress, int remotePort, String localHost, int localPort) throws JSchException, IOException {
         if (session != null && session.isConnected()) {
             session.setPortForwardingR(bindAddress, remotePort, localHost, localPort);
-
-            // Hook into the input/output streams here for tracking.
-            Channel channel = session.openChannel("direct-tcpip");
-            InputStream in = channel.getInputStream();
-            OutputStream out = channel.getOutputStream();
-
-            InputStream monitoredIn = new InputStream() {
-                @Override
-                public int read() {
-                    try {
-                        int byteValue = in.read();
-                        if (byteValue != -1) bytesReceived++;
-                        return byteValue;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    return -1;
-                }
-
-                @Override
-                public int read(byte[] b, int off, int len) throws IOException {
-                    try {
-                        int bytesRead = in.read(b, off, len);
-                        if (bytesRead != -1) bytesReceived += bytesRead;
-                        return bytesRead;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return -1;
-                    }
-                }
-            };
-
-            OutputStream monitoredOut = new OutputStream() {
-                @Override
-                public void write(int b) {
-                    try {
-                        out.write(b);
-                        bytesSent++;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                @Override
-                public void write(byte[] b, int off, int len) throws IOException {
-                    try {
-                        out.write(b, off, len);
-                        bytesSent += len;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            };
-
-            // Use the monitored streams for data transmission
-            channel.setInputStream(monitoredIn);
-            channel.setOutputStream(monitoredOut);
-
-            channel.connect();
             System.out.println("Remote port forwarding set up: " + bindAddress + ":" + remotePort + " -> " + localHost + ":" + localPort);
             logManager.log("Remote port forwarding set up: " + bindAddress + ":" + remotePort + " -> " + localHost + ":" + localPort);
+
+            // Hooking the input/output streams for byte tracking
+            Channel channel = session.openChannel("direct-tcpip");
+            InputStream in = monitorInputStream(channel.getInputStream());
+            OutputStream out = monitorOutputStream(channel.getOutputStream());
+
+            channel.setInputStream(in);
+            channel.setOutputStream(out);
+            channel.connect();
         } else {
             logManager.log("Session is not connected. Cannot set up tunnel.", LogManager.LogLevel.ERROR);
             throw new JSchException("Session is not connected. Cannot set up tunnel.");
         }
     }
 
+    // Tracking bytes sent and received using decorated input/output streams
+    public InputStream monitorInputStream(InputStream in) {
+        return new CountingInputStream(in) {
+            @Override
+            protected void afterRead(int n) {
+                if (n != -1) {
+                    bytesReceived.addAndGet(n);
+                }
+            }
+        };
+    }
+
+    public OutputStream monitorOutputStream(OutputStream out) {
+        return new CountingOutputStream(out) {
+            @Override
+            protected void beforeWrite(int n) {
+                bytesSent.addAndGet(n);
+            }
+        };
+    }
+
     public long getBytesSent() {
-        return bytesSent;
+        return bytesSent.get();
     }
 
     public long getBytesReceived() {
-        return bytesReceived;
+        return bytesReceived.get();
     }
 
     // Disconnect the SSH session

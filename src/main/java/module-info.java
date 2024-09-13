@@ -12,6 +12,7 @@ module org.example.demo3 {
     requires jsch;
     requires com.fasterxml.jackson.databind;
     requires java.logging;
+    requires org.apache.commons.io;
 
     opens com.harveyvo.java.tunnel to javafx.fxml;
     exports com.harveyvo.java.tunnel;
