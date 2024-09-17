@@ -16,10 +16,13 @@ public class SessionTable {
 
     public SessionTable(SessionManager sessionManager) {
         sessionTable = new TableView<>();
-
-        // Number order column
+        // Number column
         TableColumn<SessionStatus, String> numberCol = new TableColumn<>("No.");
         numberCol.setCellValueFactory(new PropertyValueFactory<>("sessionNumber"));
+
+        // Connection Name column
+        TableColumn<SessionStatus, String> connectionNameCol = new TableColumn<>("Connection Name");
+        connectionNameCol.setCellValueFactory(new PropertyValueFactory<>("connectionName"));
 
         // SSH Host column
         TableColumn<SessionStatus, String> sshHostCol = new TableColumn<>("SSH Host");
@@ -64,7 +67,7 @@ public class SessionTable {
                 stopButton.setOnAction(event -> {
                     SessionStatus session = getTableView().getItems().get(getIndex());
                     sessionManager.stopSession(session); // Stop the session
-                    sessionList.remove(session); // Remove it from the table
+//                    sessionList.remove(session); // Remove it from the table
                 });
             }
 
@@ -80,7 +83,7 @@ public class SessionTable {
         });
 
         // Add all columns to the table
-        sessionTable.getColumns().addAll(numberCol, sshHostCol, modeCol, localCol, remoteCol, statusCol, timerCol, bytesSentCol, bytesReceivedCol, actionCol);
+        sessionTable.getColumns().addAll(numberCol, connectionNameCol, sshHostCol, modeCol, localCol, remoteCol, statusCol, timerCol, bytesSentCol, bytesReceivedCol, actionCol);
         sessionTable.setItems(sessionList);
     }
 

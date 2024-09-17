@@ -7,14 +7,22 @@ import javafx.scene.layout.VBox;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.util.StringConverter;
 
 public class MainUI {
 
     private Label sshHostLabel, sshPortLabel, usernameLabel;
+    private TextField connectionNameField;
+    private ComboBox<SSHProfile> profileComboBox;
+    private ObservableList<SSHProfile> profiles;
+    private SSHProfile selectedProfile;
     private TextField localHostField, localPortField, remoteHostField, remotePortField;
     private RadioButton localForwardingButton, remoteForwardingButton;
     private Label flowDescriptionLabel, listeningSideLabel, localPortGuideline, remotePortGuideline;
-    private ComboBox<String> profileComboBox;
     private final GridPane grid;
     private final Consumer<String> loadProfileCallback;
     private final Runnable addNewSessionCallback;
@@ -27,6 +35,7 @@ public class MainUI {
     private final HelpDialog helpDialog = new HelpDialog();
 
     public MainUI(List<SSHProfile> profiles, Consumer<String> loadProfileCallback, Runnable addNewSessionCallback, LogDialog logDialog) {
+        this.profiles = FXCollections.observableArrayList(profiles);
         this.loadProfileCallback = loadProfileCallback;
         this.addNewSessionCallback = addNewSessionCallback;
         this.logDialog = logDialog;
@@ -34,6 +43,10 @@ public class MainUI {
         sshHostLabel = new Label("...");
         sshPortLabel = new Label("...");
         usernameLabel = new Label("...");
+
+        // Initialize UI components
+        connectionNameField = new TextField();
+        connectionNameField.setPromptText("Connection Name");
 
         localHostField = new TextField("127.0.0.1");
         localPortField = new TextField("8080");
@@ -55,22 +68,70 @@ public class MainUI {
         updateFlowDescription();
         addFieldListeners();
 
-        profileComboBox = new ComboBox<>();
-        profileComboBox.setPrefWidth(150);
-        profileComboBox.getItems().addAll(profiles.stream().map(SSHProfile::getProfileName).toList());
-        profileComboBox.setOnAction(event -> loadProfileCallback.accept(profileComboBox.getValue()));
+        profileComboBox = new ComboBox<SSHProfile>();
+        profileComboBox.setItems(this.profiles);
 
-        // Callback to refresh the profiles in the ComboBox after managing profiles
+        profileComboBox.setConverter(new StringConverter<SSHProfile>() {
+            @Override
+            public String toString(SSHProfile profile) {
+                return profile != null ? profile.getProfileName() : "";
+            }
+
+            @Override
+            public SSHProfile fromString(String string) {
+                if (string == null || string.isEmpty()) {
+                    return null;
+                }
+                return profiles.stream()
+                        .filter(p -> p.getProfileName().equals(string))
+                        .findFirst()
+                        .orElse(null);
+            }
+        });
+
+        profileComboBox.setPrefWidth(150);
+        profileComboBox.setOnAction(event -> {
+            selectedProfile = profileComboBox.getValue();
+            if (selectedProfile != null) {
+                updateProfileInfo(selectedProfile);
+            } else {
+                updateProfileInfo(null);
+            }
+        });
+
         refreshProfilesCallback = () -> {
-            profileComboBox.getItems().clear();
-            profileComboBox.getItems().addAll(profiles.stream().map(SSHProfile::getProfileName).toList());
+            String selectedProfileName = profileComboBox.getValue() != null ? profileComboBox.getValue().getProfileName() : null;
+
+            // Reload profiles from the ProfileManager
+            List<SSHProfile> updatedProfiles = new ProfileManager().loadProfiles();
+
+            this.profiles.setAll(updatedProfiles);
+
+            // Re-select the previously selected profile if it still exists
+            if (selectedProfileName != null) {
+                SSHProfile previouslySelected = profiles.stream()
+                        .filter(p -> p.getProfileName().equals(selectedProfileName))
+                        .findFirst()
+                        .orElse(null);
+
+                if (previouslySelected != null) {
+                    profileComboBox.setValue(previouslySelected);
+                    updateProfileInfo(previouslySelected);
+                } else {
+                    // If the selected profile was deleted, clear the selection
+                    profileComboBox.setValue(null);
+                    updateProfileInfo(null);
+                }
+            }
         };
+
 
         Button manageProfilesButton = new Button("Manage Profiles");
         manageProfilesButton.setOnAction(event -> {
-            ProfileManagerDialog profileManagerDialog = new ProfileManagerDialog(profileComboBox, refreshProfilesCallback);
+            ProfileManagerDialog profileManagerDialog = new ProfileManagerDialog(refreshProfilesCallback);
             profileManagerDialog.showProfileManager(null, null); // Passing null as owner and profile
         });
+
 
         Button addSessionButton = new Button("Add New Session");
         addSessionButton.setOnAction(event -> addNewSessionCallback.run());
@@ -84,16 +145,21 @@ public class MainUI {
         setupGridLayout(addSessionButton, manageProfilesButton, helpButton); // Now including the Help button
     }
 
+    public void updateProfileInfo(SSHProfile profile) {
+        if (profile != null) {
+            sshHostLabel.setText(profile.getSshHost());
+            sshPortLabel.setText(String.valueOf(profile.getSshPort()));
+            usernameLabel.setText(profile.getUsername());
+        } else {
+            sshHostLabel.setText("...");
+            sshPortLabel.setText("...");
+            usernameLabel.setText("...");
+        }
+    }
+
     public GridPane getGridPane() {
         return grid;
     }
-
-    public void updateProfileInfo(SSHProfile profile) {
-        sshHostLabel.setText(profile.getSshHost());
-        sshPortLabel.setText(String.valueOf(profile.getSshPort()));
-        usernameLabel.setText(profile.getUsername());
-    }
-
     public String getLocalHost() {
         return localHostField.getText();
     }
@@ -113,7 +179,13 @@ public class MainUI {
     public boolean isLocalForwardingSelected() {
         return localForwardingButton.isSelected();
     }
+    public String getConnectionName() {
+        return connectionNameField.getText();
+    }
 
+    public SSHProfile getSelectedProfile() {
+        return selectedProfile;
+    }
     public boolean validatePorts() {
         if (!validatePort(localPortField.getText())) {
             showAlert("Invalid Local Port", "Please enter a valid local port number (1-65535).");
@@ -154,6 +226,9 @@ public class MainUI {
         grid.add(new Label("Profile:"), 0, 0);
         grid.add(profileComboBox, 1, 0, 2, 1);
         grid.add(manageProfilesButton, 3, 0);  // Add "Manage Profiles" button
+        // Modify the grid to include the connection name field
+        grid.add(new Label("Connection Name:"), 0, 4);
+        grid.add(connectionNameField, 1, 4);
 
         grid.add(new Label("SSH Host:"), 0, 1);
         grid.add(sshHostLabel, 1, 1);

@@ -7,8 +7,10 @@ import org.apache.commons.io.output.CountingOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.UnknownHostException;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 public class SSHTunnelManager {
 
@@ -16,21 +18,30 @@ public class SSHTunnelManager {
     private AtomicLong bytesSent = new AtomicLong(0);
     private AtomicLong bytesReceived = new AtomicLong(0);
     private final LogManager logManager = LogManager.getInstance();
+    private final SessionStatus sessionStatus;
+    private final Consumer<String> logConsumer;
 
+    public SSHTunnelManager(SessionStatus sessionStatus, Consumer<String> logConsumer) {
+        this.sessionStatus = sessionStatus;
+        this.logConsumer = logConsumer;
+
+        // Set the custom logger
+        JSch.setLogger(new JSchLogger(logConsumer));
+    }
     // Connect based on the profile authentication method
     public void connect(SSHProfile profile) throws JSchException {
         JSch jsch = new JSch();
-        JSch.setLogger(new Logger() {
-            @Override
-            public boolean isEnabled(int level) {
-                return true; // Enable all logging levels
-            }
-
-            @Override
-            public void log(int level, String message) {
-                System.out.println("JSch Log: " + message);
-            }
-        });
+//        JSch.setLogger(new Logger() {
+//            @Override
+//            public boolean isEnabled(int level) {
+//                return true; // Enable all logging levels
+//            }
+//
+//            @Override
+//            public void log(int level, String message) {
+//                System.out.println("JSch Log: " + message);
+//            }
+//        });
 
         // Use SSH Key or Password authentication based on the profile data
         if (profile.getAuthMethod() == SSHProfile.AuthMethod.SSH_KEY) {
@@ -112,13 +123,15 @@ public class SSHTunnelManager {
         }
     }
 
-    // Tracking bytes sent and received using decorated input/output streams
+    // Monitor methods to track data usage
     public InputStream monitorInputStream(InputStream in) {
         return new CountingInputStream(in) {
             @Override
             protected void afterRead(int n) {
-                if (n != -1) {
+                super.afterRead(n);
+                if (n > 0) {
                     bytesReceived.addAndGet(n);
+                    sessionStatus.updateDataUsage(bytesSent.get(), bytesReceived.get());
                 }
             }
         };
@@ -128,7 +141,9 @@ public class SSHTunnelManager {
         return new CountingOutputStream(out) {
             @Override
             protected void beforeWrite(int n) {
+                super.beforeWrite(n);
                 bytesSent.addAndGet(n);
+                sessionStatus.updateDataUsage(bytesSent.get(), bytesReceived.get());
             }
         };
     }
@@ -147,6 +162,41 @@ public class SSHTunnelManager {
             session.disconnect();
             System.out.println("Disconnected from SSH server.");
             logManager.log("Disconnected from SSH server.");
+        }
+    }
+
+    public static void testConnection(SSHProfile profile) throws Exception {
+        JSch jsch = new JSch();
+
+       // JSch.setLogger(new JSchLogger(logConsumer));
+        // Set up authentication based on the profile
+        if (profile.getAuthMethod() == SSHProfile.AuthMethod.SSH_KEY) {
+            byte[] privateKeyBytes = profile.getSshKeyContent().getBytes();
+            jsch.addIdentity(profile.getUsername(), privateKeyBytes, null,
+                    profile.getPassphrase() != null ? profile.getPassphrase().getBytes() : null);
+        }
+
+        Session session = jsch.getSession(profile.getUsername(), profile.getSshHost(), profile.getSshPort());
+        if (profile.getAuthMethod() == SSHProfile.AuthMethod.PASSWORD) {
+            session.setPassword(profile.getPassword());
+        }
+        session.setConfig("StrictHostKeyChecking", "no");
+        try {
+            // Attempt to connect
+            session.connect(10000); // 10-second timeout
+            session.disconnect();
+        }
+        catch (JSchException e) {
+            // Handle different types of exceptions
+            String errorMessage;
+            if (e.getCause() instanceof UnknownHostException) {
+                errorMessage = "Unknown host: " + profile.getSshHost();
+            } else if (e.getMessage().contains("Auth fail")) {
+                errorMessage = "Authentication failed. Please check your username and password.";
+            } else {
+                errorMessage = "Failed to connect: " + e.getMessage();
+            }
+            throw new Exception(errorMessage, e);
         }
     }
 }

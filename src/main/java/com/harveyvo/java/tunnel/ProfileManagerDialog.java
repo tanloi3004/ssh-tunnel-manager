@@ -1,10 +1,12 @@
 package com.harveyvo.java.tunnel;
 
 import com.harveyvo.java.tunnel.SSHProfile.AuthMethod;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
+
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -36,11 +38,16 @@ public class ProfileManagerDialog {
     private String sshKeyContent;
     private TextArea consoleLogTextArea; //
     private SSHProfile currentProfile;
+    private Runnable refreshProfilesCallback;
+
+    public ProfileManagerDialog(Runnable refreshProfilesCallback) {
+        this.refreshProfilesCallback = refreshProfilesCallback;
+        this.profileManager = new ProfileManager();
+    }
 
     public ProfileManagerDialog(ComboBox<String> profileComboBox, Runnable onProfileChangeCallback) {
         this.profileComboBox = profileComboBox;
         this.onProfileChangeCallback = onProfileChangeCallback;
-        this.profileManager = new ProfileManager();
     }
 
     public void showProfileManager(Stage parentStage, SSHProfile profileToEdit) {
@@ -89,19 +96,19 @@ public class ProfileManagerDialog {
         Button saveButton = new Button("Save Profile");
         saveButton.setOnAction(event -> {
             saveProfile(dialog);
-            refreshProfileList();
-            refreshProfileComboBox();  // Refresh ComboBox in main UI
-            if (onProfileChangeCallback != null) {
-                onProfileChangeCallback.run();  // Trigger the callback to refresh profiles in main UI
-            }
+//            refreshProfileList();
+//            refreshProfileComboBox();  // Refresh ComboBox in main UI
+//            if (onProfileChangeCallback != null) {
+//                onProfileChangeCallback.run();  // Trigger the callback to refresh profiles in main UI
+//            }
             dialog.close();
         });
 
         Button deleteButton = new Button("Delete Profile");
         deleteButton.setOnAction(event -> {
             deleteProfile();
-            refreshProfileList();
-            refreshProfileComboBox();  // Refresh ComboBox in main UI
+//            refreshProfileList();
+//            refreshProfileComboBox();  // Refresh ComboBox in main UI
             if (onProfileChangeCallback != null) {
                 onProfileChangeCallback.run();  // Trigger the callback to refresh profiles in main UI
             }
@@ -112,8 +119,8 @@ public class ProfileManagerDialog {
         consoleLogTextArea.setEditable(false);
         consoleLogTextArea.setPromptText("Console logs will be shown here...");
         consoleLogTextArea.setWrapText(true);
-        consoleLogTextArea.setPrefColumnCount(5);
-        consoleLogTextArea.setPrefHeight(100); // Set a preferred height for the log area
+        consoleLogTextArea.setPrefColumnCount(4);
+//        consoleLogTextArea.setPrefHeight(100); // Set a preferred height for the log area
 
         GridPane formGrid = new GridPane();
         formGrid.setPadding(new Insets(10.0));
@@ -134,8 +141,8 @@ public class ProfileManagerDialog {
         formGrid.add(new Label("SSH Key:"), 0, 6);
         formGrid.add(this.sshKeyTextArea, 1, 6, 2, 1); // Adjust TextArea to span across more columns
         formGrid.add(selectKeyButton, 3, 6);
-        formGrid.add(new Label("SSH Key Passphrase:"), 0, 7 );
-        formGrid.add(this.sshKeyPassphraseField, 1, 7,2, 1);
+        formGrid.add(new Label("SSH Key Passphrase:"), 0, 7);
+        formGrid.add(this.sshKeyPassphraseField, 1, 7, 2, 1);
 
         HBox buttonBox = new HBox(10.0, saveButton, deleteButton, testConnectionButton);
         VBox vbox = new VBox(10.0, new Label("Profiles:"), this.profileListView, formGrid, new Label("Console Logs:"), consoleLogTextArea, buttonBox);
@@ -173,7 +180,7 @@ public class ProfileManagerDialog {
     private void selectSSHKeyFile() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Select SSH Private Key File");
-        File pemFile = fileChooser.showOpenDialog((Window)null);
+        File pemFile = fileChooser.showOpenDialog((Window) null);
         if (pemFile != null) {
             try {
                 this.sshKeyContent = new String(Files.readAllBytes(pemFile.toPath()));
@@ -187,40 +194,43 @@ public class ProfileManagerDialog {
     private void saveProfile(Stage dialog) {
         SSHProfile profile = new SSHProfile(this.profileNameField.getText(), this.sshHostField.getText(), Integer.parseInt(this.sshPortField.getText()), this.usernameField.getText(), this.passwordField.getText(), this.authMethodComboBox.getValue(), this.sshKeyTextArea.getText(), this.sshKeyPassphraseField.getText());
         this.profileManager.saveOrUpdateProfile(profile);
+        if (refreshProfilesCallback != null) {
+            refreshProfilesCallback.run();
+        }
         dialog.close();
     }
 
     private void testConnection() {
+        if (!validateProfileFields()) {
+            return;
+        }
         final SSHProfile profile = new SSHProfile(this.profileNameField.getText(), this.sshHostField.getText(), Integer.parseInt(this.sshPortField.getText()), this.usernameField.getText(), this.passwordField.getText(), this.authMethodComboBox.getValue(), this.sshKeyTextArea.getText(), this.sshKeyPassphraseField.getText());
         Task<Void> testTask = new Task<Void>() {
+            @Override
             protected Void call() {
                 try {
-                    SSHTunnelManager sshTunnelManager = new SSHTunnelManager();
-                    sshTunnelManager.connect(profile);
-                    sshTunnelManager.disconnect();
+                    SSHTunnelManager.testConnection(profile);
                     Platform.runLater(() -> {
-//                        ProfileManagerDialog.this.showAlert("Connection Success", "Successfully connected to SSH server.");
-                        ProfileManagerDialog.this.consoleLogTextArea.appendText("Connection successful.\n"); // Log to console
+                        consoleLogTextArea.appendText("Connection successful.\n");
                     });
                 } catch (Exception e) {
                     Platform.runLater(() -> {
-//                        ProfileManagerDialog.this.showAlert("Connection Failed", "Failed to connect: " + e.getMessage());
-                        ProfileManagerDialog.this.consoleLogTextArea.appendText("Connection failed: " + e.getMessage() + "\n"); // Log to console
+                        consoleLogTextArea.appendText(e.getMessage() + "\n");
                     });
                 }
-
                 return null;
             }
         };
-        (new Thread(testTask)).start();
+        new Thread(testTask).start();
     }
 
     private void deleteProfile() {
         String selectedProfile = this.profileListView.getSelectionModel().getSelectedItem();
         if (selectedProfile != null) {
             this.profileManager.deleteProfile(selectedProfile);
-            this.refreshProfileList();
-            this.refreshProfileComboBox();
+            if (refreshProfilesCallback != null) {
+                refreshProfilesCallback.run();
+            }
         }
     }
 
@@ -229,12 +239,12 @@ public class ProfileManagerDialog {
         List<SSHProfile> profiles = this.profileManager.loadProfiles();
         this.profileListView.getItems().addAll(profiles.stream().map(SSHProfile::getProfileName).toList());
     }
-
-    private void refreshProfileComboBox() {
-        this.profileComboBox.getItems().clear();
-        List<SSHProfile> updatedProfiles = this.profileManager.loadProfiles();
-        this.profileComboBox.getItems().addAll(updatedProfiles.stream().map(SSHProfile::getProfileName).toList());
-    }
+//
+//    private void refreshProfileComboBox() {
+//        this.profileComboBox.getItems().clear();
+//        List<SSHProfile> updatedProfiles = this.profileManager.loadProfiles();
+//        this.profileComboBox.getItems().addAll(updatedProfiles.stream().map(SSHProfile::getProfileName).toList());
+//    }
 
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -243,4 +253,32 @@ public class ProfileManagerDialog {
         alert.setContentText(message);
         alert.showAndWait();
     }
+
+    private boolean validateProfileFields() {
+        if (profileNameField.getText().isEmpty() || sshHostField.getText().isEmpty()
+                || sshPortField.getText().isEmpty() || usernameField.getText().isEmpty()) {
+            showAlert("Validation Error", "Please fill in all required fields.");
+            return false;
+        }
+
+        try {
+            Integer.parseInt(sshPortField.getText());
+        } catch (NumberFormatException e) {
+            showAlert("Validation Error", "SSH Port must be a valid number.");
+            return false;
+        }
+
+        if (authMethodComboBox.getValue() == AuthMethod.PASSWORD && passwordField.getText().isEmpty()) {
+            showAlert("Validation Error", "Please enter a password for authentication.");
+            return false;
+        }
+
+        if (authMethodComboBox.getValue() == AuthMethod.SSH_KEY && sshKeyTextArea.getText().isEmpty()) {
+            showAlert("Validation Error", "Please provide your SSH key content.");
+            return false;
+        }
+
+        return true;
+    }
+
 }

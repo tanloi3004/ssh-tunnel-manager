@@ -32,7 +32,7 @@ public class LogDialog {
         dialogVbox.setPadding(new Insets(10));
         dialogVbox.getChildren().add(logTextArea);
 
-        Scene dialogScene = new Scene(dialogVbox, 500, 500);  // Adjust window size accordingly
+        Scene dialogScene = new Scene(dialogVbox, 800, 800);  // Adjust window size accordingly
         dialog.setScene(dialogScene);
         dialog.show();
 

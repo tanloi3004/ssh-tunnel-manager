@@ -23,14 +23,15 @@ public class ProfileManager {
         this.fileManager.createFileIfNotExists(PROFILE_FILE_NAME);
     }
 
-    // Load profiles from the JSON file
     public List<SSHProfile> loadProfiles() {
+        Path profileFilePath = fileManager.getFilePath(PROFILE_FILE_NAME);
+        File file = profileFilePath.toFile();
+
+        if (!file.exists() || file.length() == 0) {
+            return new ArrayList<>();  // Return an empty list if file doesn't exist or is empty
+        }
+
         try {
-            Path profileFilePath = fileManager.getFilePath(PROFILE_FILE_NAME); // Get the profile file path
-            File file = profileFilePath.toFile();
-            if (!file.exists()) {
-                return new ArrayList<>();  // Return empty list if file doesn't exist
-            }
             return objectMapper.readValue(file, new TypeReference<List<SSHProfile>>() {});
         } catch (IOException e) {
             e.printStackTrace();

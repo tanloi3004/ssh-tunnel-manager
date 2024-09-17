@@ -1,6 +1,7 @@
 package com.harveyvo.java.tunnel;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.scene.Scene;
 import javafx.scene.layout.VBox;
@@ -9,11 +10,11 @@ import javafx.stage.Stage;
 import java.util.List;
 
 public class Main extends Application {
-
-    private final SessionManager sessionManager = new SessionManager();
+    private SessionManager sessionManager;
     private SessionTable sessionTable;
-    private final ProfileManager profileManager = new ProfileManager();
+    private ProfileManager profileManager;
     private final LogDialog logDialog = new LogDialog();
+    private final LogManager logManager = LogManager.getInstance();
     private List<SSHProfile> profiles;
     private SSHProfile selectedProfile;
     private MainUI mainUI;
@@ -22,16 +23,23 @@ public class Main extends Application {
     public void start(Stage primaryStage) {
         primaryStage.setTitle("SSH Tunnel Manager");
 
-        profiles = profileManager.loadProfiles();
-        sessionTable = new SessionTable(sessionManager);
+        profileManager = new ProfileManager();
+        sessionManager = new SessionManager();
 
-        mainUI = new MainUI(profiles, this::loadProfile, this::addNewSession, logDialog);
+        sessionTable = new SessionTable(sessionManager);
+        mainUI = new MainUI(profileManager.loadProfiles(), this::loadProfile, this::addNewSession, new LogDialog());
+
+        // Load sessions into the session table
+        for (SessionStatus session : sessionManager.getSessions()) {
+            sessionTable.addSession(session);
+        }
 
         VBox vbox = new VBox(20, mainUI.getGridPane(), sessionTable.getSessionTable());
         Scene scene = new Scene(vbox, 840, 600);
         primaryStage.setScene(scene);
         primaryStage.show();
     }
+
 
     private void loadProfile(String profileName) {
         SSHProfile profile = profiles.stream()
@@ -44,8 +52,8 @@ public class Main extends Application {
             mainUI.updateProfileInfo(profile);
         }
     }
-
     private void addNewSession() {
+        SSHProfile selectedProfile = mainUI.getSelectedProfile();
         if (selectedProfile == null) {
             mainUI.showAlert("No Profile Selected", "Please select an SSH profile before starting a session.");
             return;
@@ -55,10 +63,18 @@ public class Main extends Application {
             return;
         }
 
+        String connectionName = mainUI.getConnectionName();
+        if (connectionName == null || connectionName.isEmpty()) {
+            mainUI.showAlert("No Connection Name", "Please enter a connection name.");
+            return;
+        }
+
         int sessionCount = sessionManager.getSessions().size() + 1;
 
         SessionStatus session = new SessionStatus(
                 String.valueOf(sessionCount),
+                connectionName,
+                selectedProfile.getProfileName(),
                 selectedProfile.getSshHost(),
                 mainUI.getLocalHost(),
                 mainUI.getLocalPort(),
@@ -67,20 +83,46 @@ public class Main extends Application {
                 mainUI.isLocalForwardingSelected(),
                 "Connecting..."
         );
+        // Create SSHTunnelManager with log consumer
+        SSHTunnelManager sshTunnelManager = new SSHTunnelManager(session, message -> {
+            logManager.log(message, LogManager.LogLevel.INFO);
+        });
+        session.setSshTunnelManager(sshTunnelManager);
 
         sessionTable.addSession(session);
 
         boolean isLocalForwarding = mainUI.isLocalForwardingSelected();
 
-        Task<Void> sessionTask = sessionManager.createSessionTask(
-                selectedProfile,
-                mainUI.getLocalHost(),
-                Integer.parseInt(mainUI.getLocalPort()),
-                mainUI.getRemoteHost(),
-                Integer.parseInt(mainUI.getRemotePort()),
-                isLocalForwarding,
-                session
-        );
+        Task<Void> sessionTask = new Task<>() {
+            @Override
+            protected Void call() {
+                try {
+                    sshTunnelManager.connect(selectedProfile);
+
+                    if (isLocalForwarding) {
+                        sshTunnelManager.setUpTunnel(mainUI.getLocalHost(), Integer.parseInt(mainUI.getLocalPort()),
+                                mainUI.getRemoteHost(), Integer.parseInt(mainUI.getRemotePort()));
+                    } else {
+                        sshTunnelManager.setUpRemoteTunnel(mainUI.getRemoteHost(), Integer.parseInt(mainUI.getRemotePort()),
+                                mainUI.getLocalHost(), Integer.parseInt(mainUI.getLocalPort()));
+                    }
+
+                    Platform.runLater(() -> {
+                        session.setStatus("Connected");
+                        session.startTimer(() -> {
+                            // Update data usage periodically
+                            long sent = sshTunnelManager.getBytesSent();
+                            long received = sshTunnelManager.getBytesReceived();
+                            session.updateDataUsage(sent, received);
+                        });
+                        sessionManager.saveSessions();
+                    });
+                } catch (Exception e) {
+                    Platform.runLater(() -> session.setStatus("Failed: " + e.getMessage()));
+                }
+                return null;
+            }
+        };
 
         new Thread(sessionTask).start();
     }
